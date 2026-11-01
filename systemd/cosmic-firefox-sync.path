@@ -1,0 +1,9 @@
+[Unit]
+Description=Watch the COSMIC theme for glass opacity changes
+
+[Path]
+PathChanged=%h/.config/cosmic/com.system76.CosmicTheme.Dark/v2/transparent_background
+PathChanged=%h/.config/cosmic/com.system76.CosmicTheme.Light/v2/transparent_background
+
+[Install]
+WantedBy=default.target

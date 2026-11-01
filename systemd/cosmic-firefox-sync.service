@@ -1,0 +1,9 @@
+[Unit]
+Description=Copy COSMIC frosted-glass colors into Firefox userChrome.css
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/cosmic-firefox-sync
+
+[Install]
+WantedBy=default.target

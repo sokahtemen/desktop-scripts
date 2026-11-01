@@ -4,6 +4,9 @@ Small desktop helpers. Symlinked into `~/.local/bin`.
 
 - `firefox-webapp` - creates a Firefox (firefox-frosted) web app with its own profile,
   launcher and frosted COSMIC look. Run without arguments for usage.
+- `cosmic-firefox-sync` - copies COSMIC's frosted-glass colors (the "Glass opacity" setting)
+  into the firefox-frosted `userChrome.css` tokens; restart Firefox afterwards. To run it
+  whenever the theme changes: `cp systemd/cosmic-firefox-sync.{service,path} ~/.config/systemd/user/ && systemctl --user daemon-reload && systemctl --user enable cosmic-firefox-sync.service && systemctl --user enable --now cosmic-firefox-sync.path`
 - `xonar-knob.py` - routes the ASUS Xonar U5 volume knob to the Xonar's digital sink only.
   Install the user service: `cp systemd/xonar-knob.service ~/.config/systemd/user/ && systemctl --user enable --now xonar-knob`
 

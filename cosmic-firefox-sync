@@ -1,0 +1,95 @@
+#!/usr/bin/env python3
+"""Copy COSMIC's frosted-glass colors into the firefox-frosted userChrome.css.
+
+COSMIC's "Glass opacity" setting changes the alpha of the theme's
+transparent_background colors. Firefox can't read the COSMIC theme, so its
+userChrome.css holds copies of those colors as --cosmic-* tokens. This script
+rewrites those tokens (dark and light blocks) to match the current theme.
+Firefox loads userChrome.css only at startup, so restart it to see changes.
+
+Usage: cosmic-firefox-sync [path/to/userChrome.css]
+Default: chrome/userChrome.css of the default profile in installs.ini.
+Run by systemd/cosmic-firefox-sync.path whenever the theme changes.
+"""
+import configparser
+import os
+import re
+import sys
+import tempfile
+from pathlib import Path
+
+HOME = Path.home()
+COSMIC = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config")) / "cosmic"
+FIREFOX = HOME / ".config/mozilla/firefox"
+
+LIGHT_MARK = "/* ---------- COSMIC tokens: light ---------- */"
+END_MARK = "/* ---------- Map onto"
+
+
+def default_userchrome() -> Path:
+    ini = configparser.ConfigParser()
+    ini.read(FIREFOX / "installs.ini")
+    for section in ini.sections():
+        if "Default" in ini[section]:
+            return FIREFOX / ini[section]["Default"] / "chrome/userChrome.css"
+    sys.exit("cosmic-firefox-sync: no default profile in installs.ini")
+
+
+def read_theme(mode: str) -> dict[str, str]:
+    """Token -> #RRGGBBAA from transparent_background of the given mode."""
+    text = (COSMIC / f"com.system76.CosmicTheme.{mode}/v2/transparent_background").read_text()
+    comp = re.search(r"component:\s*\((.*?)\n\s{4}\),", text, re.S)
+    if not comp:
+        raise ValueError(f"{mode}: no component block in transparent_background")
+    outer = text[: comp.start()] + text[comp.end():]
+
+    def color(block: str, key: str) -> str:
+        m = re.search(rf"^\s*{key}:\s*\"(#[0-9A-Fa-f]{{8}})\"", block, re.M)
+        if not m:
+            raise ValueError(f"{mode}: no {key} in transparent_background")
+        return m.group(1).upper()
+
+    return {
+        "--cosmic-bg": color(outer, "base"),
+        "--cosmic-bg-divider": color(outer, "divider"),
+        "--cosmic-component": color(comp.group(1), "base"),
+        "--cosmic-component-hover": color(comp.group(1), "hover"),
+    }
+
+
+def apply(block: str, tokens: dict[str, str]) -> str:
+    for name, value in tokens.items():
+        block, n = re.subn(rf"({re.escape(name)}:\s*)#[0-9A-Fa-f]{{6,8}};",
+                           rf"\g<1>{value};", block)
+        if n != 1:
+            raise ValueError(f"{name} found {n} times in a token block (expected 1)")
+    return block
+
+
+def main() -> None:
+    path = Path(sys.argv[1]) if len(sys.argv) > 1 else default_userchrome()
+    css = path.read_text()
+    try:
+        light_at = css.index(LIGHT_MARK)
+        end_at = css.index(END_MARK, light_at)
+    except ValueError:
+        sys.exit(f"cosmic-firefox-sync: token markers not found in {path}")
+
+    new = (apply(css[:light_at], read_theme("Dark"))
+           + apply(css[light_at:end_at], read_theme("Light"))
+           + css[end_at:])
+    if new == css:
+        print("cosmic-firefox-sync: already up to date")
+        return
+
+    real = path.resolve()  # keep web-app symlinks pointing at this file
+    fd, tmp = tempfile.mkstemp(dir=real.parent, prefix=".userChrome.")
+    with os.fdopen(fd, "w") as f:
+        f.write(new)
+    os.chmod(tmp, real.stat().st_mode & 0o777)
+    os.replace(tmp, real)
+    print(f"cosmic-firefox-sync: updated {real} (restart Firefox to apply)")
+
+
+if __name__ == "__main__":
+    main()
