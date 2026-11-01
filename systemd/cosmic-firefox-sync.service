@@ -1,8 +1,13 @@
 [Unit]
 Description=Copy COSMIC frosted-glass colors into Firefox userChrome.css
+# Dragging the Glass opacity slider saves the theme many times a second;
+# without this, systemd's start limit kills the .path watcher.
+StartLimitIntervalSec=0
 
 [Service]
 Type=oneshot
+# Let a slider drag settle so one run picks up the final value.
+ExecStartPre=/bin/sleep 1
 ExecStart=%h/.local/bin/cosmic-firefox-sync
 
 [Install]
